@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id                  String   @id @default(cuid())
+  discordId           String   @unique
+  name                String
+  musicSettings       String   // JSON string
+  moderationSettings  String   // JSON string
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("guilds")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  discordId     String   @unique
+  username      String
+  discriminator String
+  avatar        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Playlist {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  userId      String
+  guildId     String
+  tracks      String   // JSON string
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("playlists")
+}
+
+model ModerationLog {
+  id          String   @id @default(cuid())
+  guildId     String
+  userId      String
+  moderatorId String
+  action      String
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@map("moderation_logs")
+}
