@@ -1,5 +1,5 @@
 import { Collection, CacheType, ChatInputCommandInteraction } from 'discord.js';
-import { injectable } from 'tsyringe';
+import { inject, injectable } from 'tsyringe';
 import { PlayCommand } from '../commands/music/PlayCommand';
 import { QueueCommand } from '../commands/music/QueueCommand';
 import { CreatePlaylistCommand } from '../commands/playlist/CreatePlaylistCommand';
@@ -14,9 +14,9 @@ export class CommandHandler {
     private commands: Collection<string, Command> = new Collection();
 
     constructor(
-        private playCommand: PlayCommand,
-        private queueCommand: QueueCommand,
-        private createPlaylistCommand: CreatePlaylistCommand
+        @inject('PlayCommand') private playCommand: PlayCommand,
+        @inject('QueueCommand') private queueCommand: QueueCommand,
+        @inject('CreatePlaylistCommand') private createPlaylistCommand: CreatePlaylistCommand
     ) {
         this.registerCommands();
     }

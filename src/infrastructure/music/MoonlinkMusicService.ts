@@ -1,5 +1,6 @@
 import { injectable, inject } from 'tsyringe';
 import { MoonlinkManager } from 'moonlink.js';
+import { Client } from 'discord.js';
 import { IMusicService } from '@domain/interfaces/services/IMusicService';
 import { ICacheService } from '@domain/interfaces/services/ICacheService';
 import { MusicQueue } from '@domain/entities/MusicQueue';
@@ -10,7 +11,8 @@ export class MoonlinkMusicService implements IMusicService {
     private moonlink: MoonlinkManager;
 
     constructor(
-        @inject('ICacheService') private cacheService: ICacheService
+        @inject('ICacheService') private cacheService: ICacheService,
+        @inject('DiscordClient') private discordClient: Client
     ) {
         this.moonlink = new MoonlinkManager([{
             host: process.env['LAVALINK_HOST'] || 'localhost',
@@ -18,8 +20,13 @@ export class MoonlinkMusicService implements IMusicService {
             password: process.env['LAVALINK_PASSWORD'] || 'youshallnotpass',
             secure: false
         }], {
-            client: null, // Will be injected later
-        }, null);
+            client: this.discordClient,
+        }, (guildId: string, payload: any) => {
+            const guild = this.discordClient.guilds.cache.get(guildId);
+            if (guild) {
+                guild.shard.send(payload);
+            }
+        });
 
         this.setupEventListeners();
     }

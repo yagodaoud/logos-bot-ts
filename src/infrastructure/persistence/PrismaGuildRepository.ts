@@ -1,11 +1,11 @@
-import { injectable } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import { PrismaClient } from '@prisma/client';
 import { IGuildRepository } from '@domain/interfaces/repositories/IGuildRepository';
 import { Guild, MusicSettings, ModerationSettings } from '@domain/entities/Guild';
 
 @injectable()
 export class PrismaGuildRepository implements IGuildRepository {
-    constructor(private prisma: PrismaClient) { }
+    constructor(@inject('PrismaClient') private prisma: PrismaClient) { }
 
     async findById(id: string): Promise<Guild | null> {
         const guild = await this.prisma.guild.findUnique({

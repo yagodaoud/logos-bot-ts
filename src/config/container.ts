@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
-import { Client } from 'discord.js';
+import { Client, GatewayIntentBits } from 'discord.js';
 
 // Infrastructure
 import { Database } from '@infrastructure/config/Database';
@@ -28,7 +28,14 @@ container.register('PrismaClient', {
     useFactory: () => Database.getInstance()
 });
 container.register('DiscordClient', {
-    useClass: Client
+    useFactory: () => new Client({
+        intents: [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.GuildVoiceStates,
+            GatewayIntentBits.MessageContent
+        ]
+    })
 });
 
 // Register repositories

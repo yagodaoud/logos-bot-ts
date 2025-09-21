@@ -1,11 +1,11 @@
-import { injectable } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import { PrismaClient } from '@prisma/client';
 import { IPlaylistRepository } from '@domain/interfaces/repositories/IPlaylistRepository';
 import { Playlist, Track } from '@domain/entities/Playlist';
 
 @injectable()
 export class PrismaPlaylistRepository implements IPlaylistRepository {
-    constructor(private prisma: PrismaClient) { }
+    constructor(@inject('PrismaClient') private prisma: PrismaClient) { }
 
     async findById(id: string): Promise<Playlist | null> {
         const playlist = await this.prisma.playlist.findUnique({

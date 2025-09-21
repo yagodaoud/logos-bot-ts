@@ -17,7 +17,7 @@ export class DiscordBot {
             ]
         });
 
-        this.commandHandler = container.resolve(CommandHandler);
+        this.commandHandler = container.resolve('CommandHandler');
         this.setupEventListeners();
     }
 

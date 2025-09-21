@@ -1,10 +1,10 @@
-import { injectable } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import { Client, EmbedBuilder, VoiceChannel, GuildMember, Guild } from 'discord.js';
 import { IDiscordService } from '@domain/interfaces/services/IDiscordService';
 
 @injectable()
 export class DiscordService implements IDiscordService {
-    constructor(private client: Client) { }
+    constructor(@inject('DiscordClient') private client: Client) { }
 
     async sendMessage(channelId: string, content: string, embeds?: any[]): Promise<void> {
         const channel = await this.client.channels.fetch(channelId);
@@ -119,7 +119,7 @@ export class DiscordService implements IDiscordService {
         try {
             const guild = await this.client.guilds.fetch(guildId);
             return await guild.members.fetch(userId);
-        } catch {
+        } catch (ex: any) {
             return null;
         }
     }

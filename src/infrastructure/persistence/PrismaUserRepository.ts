@@ -1,11 +1,11 @@
-import { injectable } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import { PrismaClient } from '@prisma/client';
 import { IUserRepository } from '@domain/interfaces/repositories/IUserRepository';
 import { User } from '@domain/entities/User';
 
 @injectable()
 export class PrismaUserRepository implements IUserRepository {
-    constructor(private prisma: PrismaClient) { }
+    constructor(@inject('PrismaClient') private prisma: PrismaClient) { }
 
     async findById(id: string): Promise<User | null> {
         const user = await this.prisma.user.findUnique({
