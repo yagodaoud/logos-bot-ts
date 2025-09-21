@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
-import { Client, GatewayIntentBits } from 'discord.js';
 
 // Infrastructure
 import { Database } from '@infrastructure/config/Database';
@@ -27,16 +26,8 @@ import { CreatePlaylistCommand } from '@presentation/commands/playlist/CreatePla
 container.register('PrismaClient', {
     useFactory: () => Database.getInstance()
 });
-container.register('DiscordClient', {
-    useFactory: () => new Client({
-        intents: [
-            GatewayIntentBits.Guilds,
-            GatewayIntentBits.GuildMessages,
-            GatewayIntentBits.GuildVoiceStates,
-            GatewayIntentBits.MessageContent
-        ]
-    })
-});
+
+// DiscordClient will be registered by DiscordBot after login
 
 // Register repositories
 container.register('IGuildRepository', {

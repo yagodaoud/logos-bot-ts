@@ -5,7 +5,7 @@ import { Database } from '@infrastructure/config/Database';
 
 export class DiscordBot {
     private client: Client;
-    private commandHandler: CommandHandler;
+    private commandHandler: CommandHandler | null = null;
 
     constructor() {
         this.client = new Client({
@@ -17,13 +17,20 @@ export class DiscordBot {
             ]
         });
 
-        this.commandHandler = container.resolve('CommandHandler');
         this.setupEventListeners();
     }
 
     private setupEventListeners(): void {
         this.client.once(Events.ClientReady, async (readyClient) => {
             console.log(`Bot is ready! Logged in as ${readyClient.user.tag}`);
+
+            // Register the authenticated client in the DI container
+            container.register('DiscordClient', {
+                useValue: this.client
+            });
+
+            // Now resolve the CommandHandler after the client is registered
+            this.commandHandler = container.resolve('CommandHandler');
 
             // Register slash commands
             await this.registerSlashCommands();
@@ -33,7 +40,7 @@ export class DiscordBot {
         });
 
         this.client.on(Events.InteractionCreate, async (interaction) => {
-            if (interaction.isChatInputCommand()) {
+            if (interaction.isChatInputCommand() && this.commandHandler) {
                 await this.commandHandler.handleCommand(interaction);
             }
         });
@@ -49,6 +56,11 @@ export class DiscordBot {
 
     private async registerSlashCommands(): Promise<void> {
         try {
+            if (!this.commandHandler) {
+                console.error('CommandHandler not available for slash command registration');
+                return;
+            }
+
             const commands = this.commandHandler.getCommands();
             const commandData = Array.from(commands.values()).map(command => command.data.toJSON());
 

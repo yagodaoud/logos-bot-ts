@@ -1,5 +1,5 @@
 import { injectable, inject } from 'tsyringe';
-import { MoonlinkManager } from 'moonlink.js';
+import { Manager } from 'moonlink.js';
 import { Client } from 'discord.js';
 import { IMusicService } from '@domain/interfaces/services/IMusicService';
 import { ICacheService } from '@domain/interfaces/services/ICacheService';
@@ -8,36 +8,87 @@ import { Track } from '@domain/entities/Playlist';
 
 @injectable()
 export class MoonlinkMusicService implements IMusicService {
-    private moonlink: MoonlinkManager;
+    private moonlink: Manager;
 
     constructor(
         @inject('ICacheService') private cacheService: ICacheService,
         @inject('DiscordClient') private discordClient: Client
     ) {
-        this.moonlink = new MoonlinkManager([{
-            host: process.env['LAVALINK_HOST'] || 'localhost',
-            port: parseInt(process.env['LAVALINK_PORT'] || '2333'),
-            password: process.env['LAVALINK_PASSWORD'] || 'youshallnotpass',
-            secure: false
-        }], {
-            client: this.discordClient,
-        }, (guildId: string, payload: any) => {
-            const guild = this.discordClient.guilds.cache.get(guildId);
-            if (guild) {
-                guild.shard.send(payload);
+        this.moonlink = new Manager({
+            nodes: [{
+                host: process.env['LAVALINK_HOST'] || 'localhost',
+                port: parseInt(process.env['LAVALINK_PORT'] || '2333'),
+                password: process.env['LAVALINK_PASSWORD'] || 'youshallnotpass',
+                secure: false
+            }],
+            options: {
+                clientName: 'logos-bot-ts'
+            },
+            sendPayload: (guildId: string, payload: any) => {
+                const guild = this.discordClient.guilds.cache.get(guildId);
+                if (guild) {
+                    guild.shard.send(payload);
+                }
             }
         });
 
+        // Initialize Manager with client ID
+        this.initializeMoonlink();
         this.setupEventListeners();
     }
 
+    private async initializeMoonlink(): Promise<void> {
+        try {
+            // Wait for the client to be ready
+            if (this.discordClient.user) {
+                await this.moonlink.init(this.discordClient.user.id);
+                console.log('MoonlinkManager initialized with client ID:', this.discordClient.user.id);
+            } else {
+                // If client is not ready yet, wait for the ready event
+                this.discordClient.once('ready', async () => {
+                    if (this.discordClient.user) {
+                        await this.moonlink.init(this.discordClient.user.id);
+                        console.log('MoonlinkManager initialized with client ID:', this.discordClient.user.id);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error initializing MoonlinkManager:', error);
+        }
+    }
+
     async getQueue(guildId: string): Promise<MusicQueue | null> {
-        const queueData = await this.cacheService.get<MusicQueue>(`queue:${guildId}`);
-        return queueData;
+        const queueData = await this.cacheService.get<any>(`queue:${guildId}`);
+        if (!queueData) {
+            return null;
+        }
+
+        // Reconstruct MusicQueue instance from cached data
+        return new MusicQueue(
+            queueData.guildId,
+            queueData.tracks,
+            queueData.currentTrackIndex,
+            queueData.isLooping,
+            queueData.isShuffled,
+            queueData.volume,
+            queueData.isPlaying,
+            queueData.isPaused
+        );
     }
 
     async setQueue(guildId: string, queue: MusicQueue): Promise<void> {
-        await this.cacheService.set(`queue:${guildId}`, queue, 3600); // 1 hour TTL
+        // Store queue data as plain object for proper serialization
+        const queueData = {
+            guildId: queue.guildId,
+            tracks: queue.tracks,
+            currentTrackIndex: queue.currentTrackIndex,
+            isLooping: queue.isLooping,
+            isShuffled: queue.isShuffled,
+            volume: queue.volume,
+            isPlaying: queue.isPlaying,
+            isPaused: queue.isPaused
+        };
+        await this.cacheService.set(`queue:${guildId}`, queueData, 3600); // 1 hour TTL
     }
 
     async addTrack(guildId: string, track: Track): Promise<void> {
@@ -90,19 +141,7 @@ export class MoonlinkMusicService implements IMusicService {
 
         try {
             await player.play({
-                track: {
-                    encoded: currentTrack.url,
-                    info: {
-                        title: currentTrack.title,
-                        author: currentTrack.author,
-                        length: currentTrack.duration,
-                        identifier: currentTrack.id,
-                        uri: currentTrack.url,
-                        isStream: false,
-                        isSeekable: true,
-                        position: 0
-                    }
-                }
+                encoded: currentTrack.url
             });
 
             const playingQueue = queue.play();
@@ -203,19 +242,52 @@ export class MoonlinkMusicService implements IMusicService {
 
     async searchTracks(query: string): Promise<Track[]> {
         try {
-            const searchResults = await this.moonlink.search(query);
+            // Check if Manager is properly initialized
+            if (!this.moonlink.initialize) {
+                console.error('MoonlinkManager not initialized. Make sure the Discord client is ready.');
+                return [];
+            }
 
-            if (!searchResults || !searchResults.tracks) {
+            // Check if there are any connected nodes
+            if (!this.moonlink.nodes.hasConnected()) {
+                console.error('No connected Lavalink nodes available. Please check your Lavalink server connection.');
+                return [];
+            }
+
+            console.log('Searching for tracks with query:', query);
+            const searchResults = await this.moonlink.search({
+                query: query,
+                source: 'youtube'
+            });
+            console.log('Search results:', JSON.stringify(searchResults, null, 2));
+
+            if (!searchResults) {
+                console.log('Search returned null/undefined');
+                return [];
+            }
+
+            if (!searchResults.tracks) {
+                console.log('Search results have no tracks property. Full response:', searchResults);
+                return [];
+            }
+
+            if (!Array.isArray(searchResults.tracks)) {
+                console.log('Search results tracks is not an array:', typeof searchResults.tracks, searchResults.tracks);
+                return [];
+            }
+
+            if (searchResults.tracks.length === 0) {
+                console.log('No tracks found for query:', query);
                 return [];
             }
 
             return searchResults.tracks.map((track: any) => ({
-                id: track.info.identifier,
-                title: track.info.title,
-                author: track.info.author,
-                duration: track.info.length,
+                id: track.identifier,
+                title: track.title,
+                author: track.author,
+                duration: track.length,
                 url: track.track,
-                thumbnail: track.info.artworkUrl,
+                thumbnail: track.artworkUrl,
                 requesterId: '', // Will be set when adding to queue
                 addedAt: new Date()
             }));
@@ -238,21 +310,38 @@ export class MoonlinkMusicService implements IMusicService {
 
     private setupEventListeners(): void {
         this.moonlink.on('trackStart', (player, track) => {
-            console.log(`Track started: ${track.info.title} in guild ${player.guildId}`);
+            console.log(`Track started: ${track.title} in guild ${player.guildId}`);
         });
 
         this.moonlink.on('trackEnd', (player, track) => {
-            console.log(`Track ended: ${track.info.title} in guild ${player.guildId}`);
+            console.log(`Track ended: ${track.title} in guild ${player.guildId}`);
             // Auto-skip to next track
             this.skip(player.guildId);
         });
 
-        this.moonlink.on('trackError', (player, _track, error) => {
-            console.error(`Track error in guild ${player.guildId}:`, error);
+        this.moonlink.on('trackException', (player, _track, exception) => {
+            console.error(`Track error in guild ${player.guildId}:`, exception);
         });
 
         this.moonlink.on('queueEnd', (player) => {
             console.log(`Queue ended in guild ${player.guildId}`);
+        });
+
+        // Add node connection event listeners
+        this.moonlink.on('nodeConnected', (node) => {
+            console.log(`Lavalink node connected: ${node.host}:${node.port}`);
+        });
+
+        this.moonlink.on('nodeDisconnect', (node) => {
+            console.log(`Lavalink node disconnected: ${node.host}:${node.port}`);
+        });
+
+        this.moonlink.on('nodeError', (node, error) => {
+            console.error(`Lavalink node error: ${node.host}:${node.port}`, error);
+        });
+
+        this.moonlink.on('debug', (message) => {
+            console.log('[Moonlink Debug]:', message);
         });
     }
 }
